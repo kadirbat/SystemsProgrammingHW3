@@ -4,7 +4,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 
-public class CacheSimulator {
+public class Said {
 
 	static int s = 0;
 	static int E = 0;
@@ -242,8 +242,8 @@ public class CacheSimulator {
         long ramAddress = (long) (tag << (indexBits + blockBits)) | (setIndex << blockBits);
         
         // initialize ramData by a B bytes from RAM
-        byte[] ramData = new byte[CacheSimulator.B];
-        System.arraycopy(ram, (int) ramAddress, ramData, 0, CacheSimulator.B);
+        byte[] ramData = new byte[Said.B];
+        System.arraycopy(ram, (int) ramAddress, ramData, 0, Said.B);
 
         // update line fields
         line.setTag(tag);
@@ -284,7 +284,7 @@ class Line {
 		this.tag = 0;
 		this.valid = 0;
 		this.time = 0;
-		this.data = new byte[CacheSimulator.B];
+		this.data = new byte[Said.B];
 	}
 
 	public int getTag() {
