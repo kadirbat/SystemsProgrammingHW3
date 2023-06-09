@@ -30,9 +30,6 @@ public class CacheSimulator {
 			System.exit(1);
 		}
 		
-		int s = 0;
-		int E = 0;
-		int b = 0;
 		String trace = "";
 		
 		for (int i = 0; i < 8; i = i + 2) {
