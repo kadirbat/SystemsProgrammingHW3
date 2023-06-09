@@ -1,4 +1,5 @@
 import java.io.BufferedReader;
+import java.io.EOFException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -24,7 +25,8 @@ public class CacheSimulator {
 		// 8 arguments
 		if (args.length != 8) {
 			System.out.println("Number of arguments must be 8!");
-			System.out.println("Example: ./your_simulator -s 1 -E 2 -b 3 -t test1.trace");
+			System.out.println("Example on to write on terminal after compiling:");
+			System.out.println("java CacheSimulator -s 1 -E 2 -b 3 -t test.trace");
 			System.exit(1);
 		}
 		
@@ -124,29 +126,28 @@ public class CacheSimulator {
 			}
 			lineTrace = readTrace.readLine();
 		}
+		System.out.println("hits:" + hits + " misses:" + misses + " evictions:" + evictions);
 	}
 	
 	public static void dataLoad(Line[][] cache, String address, int size) {
 		// hexadecimal address to a long value (16 indicates base 16)
-        long decimalAddress = Long.parseLong(address, 16);
+        long addressDec = Long.parseLong(address, 16);
 
         // getting the tag, index, and block offset (<<< does not maintain sign bit)
-        int tag = (int) (decimalAddress >>> (indexBits + blockBits));
-        int index = (int) ((decimalAddress >>> blockBits) & ((1 << indexBits) - 1));
-        int blockOffset = (int) (decimalAddress & ((1 << blockBits) - 1));
+        int tag = (int) (addressDec >>> (indexBits + blockBits));
+        int index = (int) ((addressDec >>> blockBits) & ((1 << indexBits) - 1));
+        int blockOffset = (int) (addressDec & ((1 << blockBits) - 1));
         boolean checkHit = false;
         
         // found in cache
-        for (Line[] set : cache) {
-        	for (Line line : set) {
-        		if (line.getTag() == tag && line.getValid() == 1) {
-        			System.out.println("  Hit");
-                    hits++;
-                    checkHit = true;
-                    line.setTime(System.currentTimeMillis());
-                    break;
-                }
-        	}
+        for (Line line : cache[index]) {
+            if (line.getTag() == tag && line.getValid() == 1) {
+                System.out.println("  Hit");
+                hits++;
+                checkHit = true;
+                line.setTime(System.currentTimeMillis());
+                break;
+            }
         }
         if (checkHit == false) {
         	System.out.println("  Miss");
@@ -154,40 +155,103 @@ public class CacheSimulator {
         	misses++;
         	
         	// find empty line in cache or a line that has least time to replace from RAM
-        	Line victimLine = cache[0][0];
-        	boolean foundLine = false;
-        	for (int i = 0; i < cache.length; i++) {
-        		for (int j = 0; j < cache[i].length; j++) {
-        			// found empty
-        			if (cache[i][j].getValid() == 0 && cache[i][j].getTag() == 0) {
-        				victimLine = cache[i][j];
-        				foundLine = true;
-        				break;
-        			}
-        			// found less time (FIFO)
-        			if (cache[i][j].getTime() < victimLine.getTime()) {
-        				victimLine = cache[i][j];
-        			}
-        		}
-        		if (foundLine == true) {
-        			break;
-        		}
+        	Line victimLine = cache[index][0];
+            boolean foundLine = false;
+            for (int j = 0; j < cache[index].length; j++) {
+                // found empty
+                if (cache[index][j].getValid() == 0 && cache[index][j].getTag() == 0) {
+                    victimLine = cache[index][j];
+                    foundLine = true;
+                    break;
+                }
+                // found less time (FIFO)
+                if (cache[index][j].getTime() < victimLine.getTime()) {
+                    victimLine = cache[index][j];
+                }
         	}
         	
+            // could not find empty space and eviction operation is going to happen
         	if (victimLine.getValid() == 1) {
         		evictions++;
-        		
         	}
-        	
         	// update line evicted
+        	copyDataFromRam(victimLine, addressDec, index, tag, blockOffset, size);
         }
-
 	}
 
 	public static void dataStore(Line[][] cache, String address, int size, String data) {
+		// hexadecimal address to a long value (16 indicates base 16)
+        long addressDec = Long.parseLong(address, 16);
 
+        // getting the tag, index, and block offset (<<< does not maintain sign bit)
+        int tag = (int) (addressDec >>> (indexBits + blockBits));
+        int index = (int) ((addressDec >>> blockBits) & ((1 << indexBits) - 1));
+        int blockOffset = (int) (addressDec & ((1 << blockBits) - 1));
+        boolean checkHit = false;
+        
+        // found in cache then replace data in cache by the given
+        for (Line line : cache[index]) {
+            if (line.getTag() == tag && line.getValid() == 1) {
+                System.out.println("  Hit");
+                System.out.println("  Store in cache and RAM");
+                hits++;
+                checkHit = true;
+                line.setTime(System.currentTimeMillis());
+                line.setData(data.getBytes(), blockOffset, size);
+                break;
+            }
+        }
+        // is not in cache get from RAM then replace data
+        if (checkHit == false) {
+        	System.out.println("  Miss");
+        	System.out.println("  Place in cache");
+        	misses++;
+        	
+        	// find empty line in cache or a line that has least time to replace from RAM
+        	Line victimLine = cache[index][0];
+            boolean foundLine = false;
+            for (int j = 0; j < cache[index].length; j++) {
+                // found empty
+                if (cache[index][j].getValid() == 0 && cache[index][j].getTag() == 0) {
+                    victimLine = cache[index][j];
+                    foundLine = true;
+                    break;
+                }
+                // found less time (FIFO)
+                if (cache[index][j].getTime() < victimLine.getTime()) {
+                    victimLine = cache[index][j];
+                }
+        	}
+        	
+            // could not find empty space and eviction operation is going to happen
+        	if (victimLine.getValid() == 1) {
+        		evictions++;
+        	}
+        	// update line evicted
+        	copyDataFromRam(victimLine, addressDec, index, tag, blockOffset, size);
+        	
+        	/*   STORE DATA GIVEN !! HOW ?    */
+        	
+        	
+        }
 	}
 
+	// copy from RAM to cache line
+	public static void copyDataFromRam(Line line, long addressDec, int setIndex, int tag, int blockOffset, int size) {
+		// calculate RAM address to load the line data from
+        long ramAddress = (long) (tag << (indexBits + blockBits)) | (setIndex << blockBits);
+        
+        // initialize ramData by a B bytes from RAM
+        byte[] ramData = new byte[CacheSimulator.B];
+        System.arraycopy(ram, (int) ramAddress, ramData, 0, CacheSimulator.B);
+
+        // update line fields
+        line.setTag(tag);
+        line.setValid((short) 1);
+        line.setTime(System.currentTimeMillis());
+        line.setData(ramData, blockOffset, size);
+	}
+	
 	public static void readRam() {
 		try {
 			// to read large array of bytes
@@ -197,8 +261,12 @@ public class CacheSimulator {
             accessBinFile.seek(0); 
             ram = new byte[(int) lenRam];
             // reads bytes from file into ram bytes array
+            try {
             accessBinFile.readFully(ram);
+            }
+            catch (EOFException eofe){
             accessBinFile.close();
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
